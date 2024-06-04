@@ -8,11 +8,12 @@ pub struct Donut {
     rotation_speed: [f64; 3],
     rotation_angle: [f64; 3],
     granularity: i64,
-    screen_size: [i64; 2],
+    pub(crate) screen_size: [i64; 2],
+    light_vec: Array1<f64>,
 }
 
 impl Donut {
-    pub fn new(major_radius: f64, minor_radius: f64, zoom: f64, rotation_speed: [f64; 3], rotation_angle: [f64; 3], granularity: i64, screen_size: [i64; 2]) -> Result<Donut, &'static str> {
+    pub fn new(major_radius: f64, minor_radius: f64, zoom: f64, rotation_speed: [f64; 3], rotation_angle: [f64; 3], granularity: i64, screen_size: [i64; 2], light_vec: [f64; 3]) -> Result<Donut, &'static str> {
         if major_radius <= 0.0 {
             return Err("Major radius must be greater than 0");
         }
@@ -37,6 +38,10 @@ impl Donut {
             return Err("Rotation angle must be between -2 * PI and 2 * PI");
         }
 
+        let mut light_vec = Array1::from(light_vec.to_vec());
+        let norm = light_vec.dot(&light_vec).sqrt();
+        light_vec = light_vec / norm;
+
         Ok(Donut {
             major_radius,
             minor_radius,
@@ -45,6 +50,7 @@ impl Donut {
             rotation_angle,
             granularity,
             screen_size,
+            light_vec,
         })
     }
 
@@ -82,6 +88,7 @@ impl Donut {
                 [phi.sin(), phi.cos(), 0.0],
                 [0.0, 0.0, 1.0],
             ]);
+
             for j in 0..=self.granularity {
                 let theta = j as f64 * 2.0 * PI / self.granularity as f64;
                 let vec = Array1::from(vec![self.major_radius + self.minor_radius * theta.cos(), 0.0, self.minor_radius * theta.sin()]);
@@ -97,20 +104,21 @@ impl Donut {
                 let x_screen = &x_screen + (self.screen_size[0] as f64 / 2.0);
                 let y_screen = &y_screen + (self.screen_size[1] as f64 / 2.0);
 
+                let mut normal = Array1::from(vec![x - self.major_radius, y, z]);
+                let norm = normal.dot(&normal).sqrt();
+                normal = normal / norm;
+
                 if x_screen >= 0.0 && x_screen < self.screen_size[0] as f64 && y_screen >= 0.0 && y_screen < self.screen_size[1] as f64 {
                     if z_buffer[x_screen as usize][y_screen as usize] < z {
                         z_buffer[x_screen as usize][y_screen as usize] = z;
 
-                        screen[x_screen as usize][y_screen as usize] += 0.3;
-                        if screen[x_screen as usize][y_screen as usize] >= 1.0 {
-                            screen[x_screen as usize][y_screen as usize] = 1.0;
-                        }
+                        screen[x_screen as usize][y_screen as usize] = normal.dot(&self.light_vec) * 0.9 + 0.1;
                     }
                 }
             }
         }
 
-        return screen;
+        screen
     }
 
 
