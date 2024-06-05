@@ -1,5 +1,11 @@
+use std::io::{stdout, Write};
+use std::sync::{Arc, atomic::{AtomicBool, Ordering}};
 use std::thread;
 use std::time::Duration;
+
+use crossterm::{cursor::{Hide, Show}, execute, style::{Color, SetForegroundColor}, terminal::{Clear, ClearType, EnterAlternateScreen, LeaveAlternateScreen}};
+use crossterm::event::{self, Event};
+
 use crate::models::donut::Donut;
 
 pub struct Canvas {
@@ -10,7 +16,8 @@ pub struct Canvas {
 
 
 impl Canvas {
-    pub fn new(model: Donut, frame_rate: u64, fill: Vec<char>) -> Canvas {
+    pub fn new(model: Donut, frame_rate: u64, fill: Vec<char>, color: Color) -> Canvas {
+        execute!(stdout(), EnterAlternateScreen, Clear(ClearType::All), Hide, SetForegroundColor(color)).unwrap();
         Canvas {
             model,
             frame_rate,
@@ -18,25 +25,38 @@ impl Canvas {
         }
     }
 
-    pub fn display(&mut self, frame_count: u64) {
-        print!("\x1b[2J"); // 清屏
-        print!("\x1b[?25l"); // 隐藏光标
-        print!("\x1b[33m"); // 设置颜色
+    pub fn drop(&mut self) {
+        execute!(stdout(), LeaveAlternateScreen, Show).unwrap();
+    }
+
+    pub fn display(&mut self) -> Result<(), Box<dyn std::error::Error>> {
+        let running = Arc::new(AtomicBool::new(true));
+        let r = running.clone();
+
+        thread::spawn(move || {
+            while r.load(Ordering::SeqCst) {
+                if event::poll(Duration::from_millis(100)).unwrap() {
+                    if let Event::Key(_event) = event::read().unwrap() {
+                        r.store(false, Ordering::SeqCst);
+                    }
+                }
+            }
+        });
+
         let mut last_screen = vec![vec![' '; self.model.screen_size[1] as usize]; self.model.screen_size[0] as usize];
-        for _i in 0..frame_count {
+        while running.load(Ordering::SeqCst) {
             let screen = self.model.render();
             last_screen = self.next_frame(&screen, &last_screen);
 
             self.model.update();
+
+            if !running.load(Ordering::SeqCst) {
+                break;
+            }
             thread::sleep(Duration::from_millis(1000 / self.frame_rate));
         }
-        print!("\x1b[?25h"); // 显示光标
+        Ok(())
     }
-
-    // fn parse_color(&self, color: f64) -> String {
-    //     let color = (color * 255.0) as u8;
-    //     format!("\x1b[38;2;{};{};{}m", color, color, color)
-    // }
 
     fn brightness2char(&self, screen: &Vec<Vec<f64>>) -> Vec<Vec<char>> {
         let mut result = vec![vec![' '; screen[0].len()]; screen.len()];
@@ -51,7 +71,7 @@ impl Canvas {
     fn next_frame(&self, screen: &Vec<Vec<f64>>, last_screen_char: &Vec<Vec<char>>) -> Vec<Vec<char>> {
         let screen = self.brightness2char(screen);
 
-        let mut frame_str = String::from("\x1b[H");
+        let mut frame_str = String::new();
         for i in 0..screen.len() {
             let mut space = 0;
             let mut buffer = String::new();
@@ -73,7 +93,7 @@ impl Canvas {
             frame_str.push('\n');
         }
 
-        print!("{}", frame_str);
+        writeln!(stdout(), "{}", frame_str).unwrap();
         screen
     }
 

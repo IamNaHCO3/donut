@@ -1,4 +1,5 @@
 use std::f64::consts::PI;
+
 use ndarray::{Array1, Array2};
 
 pub struct Donut {
@@ -80,7 +81,7 @@ impl Donut {
 
         let rotation = rotation_x.dot(&rotation_y).dot(&rotation_z);
 
-        for i in 0..self.granularity {
+        for i in 0..=self.granularity {
             let phi = i as f64 * 2.0 * PI / self.granularity as f64;
             let rotation_torus = Array2::from(vec![
                 [phi.cos(), -phi.sin(), 0.0],
