@@ -39,8 +39,7 @@ impl Donut {
         }
 
         let mut light_vec = Array1::from(light_vec.to_vec());
-        let norm = light_vec.dot(&light_vec).sqrt();
-        light_vec = light_vec / norm;
+        light_vec = &light_vec / light_vec.dot(&light_vec).sqrt();
 
         Ok(Donut {
             major_radius,
@@ -105,14 +104,12 @@ impl Donut {
                 let y_screen = &y_screen + (self.screen_size[1] as f64 / 2.0);
 
                 let mut normal = Array1::from(vec![x - self.major_radius, y, z]);
-                let norm = normal.dot(&normal).sqrt();
-                normal = normal / norm;
+                normal = &normal / normal.dot(&normal).sqrt();
 
                 if x_screen >= 0.0 && x_screen < self.screen_size[0] as f64 && y_screen >= 0.0 && y_screen < self.screen_size[1] as f64 {
                     if z_buffer[x_screen as usize][y_screen as usize] < z {
                         z_buffer[x_screen as usize][y_screen as usize] = z;
-
-                        screen[x_screen as usize][y_screen as usize] = normal.dot(&self.light_vec) * 0.9 + 0.1;
+                        screen[x_screen as usize][y_screen as usize] = normal.dot(&self.light_vec) * 0.5 + 0.5;
                     }
                 }
             }
